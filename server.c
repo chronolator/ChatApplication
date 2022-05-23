@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -38,6 +39,37 @@ int main(int argc, char *argv[]){
     if(bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
         error("Binding Failed");
     }
+
+    listen(sockfd, 5);
+    client_len = sizeof(client_addr);
+
+    newsockfd = accept(sockfd, (struct sockaddr*) &client_addr, &client_len);
+    if(newsockfd < 0) {
+        error("Error on accept");
+    }
+
+    for(;;) {
+        memset((char *) buf, 0, sizeof(buf));
+        n = read(newsockfd, buf, sizeof(256));
+        if(n < 0) {
+            error("Error on reading");
+        }
+
+        printf("Client: %s\n", buf);
+        memset((char *) buf, 0, sizeof(buf));
+        fgets(buf, sizeof(buf), stdin);
+
+        n = write(newsockfd, buf, strlen(buf));
+        if(n < 0) {
+            error("Error on writing");
+        }
+
+        int i = strncmp("Bye", buf, 3);
+        if(i == 0) { break; }
+
+    }
+    close(newsockfd);
+    close(sockfd);
 
     return EXIT_SUCCESS;
 }
