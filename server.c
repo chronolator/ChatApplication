@@ -19,17 +19,17 @@ int main(int argc, char *argv[]){
     // Establish variables
     int sockfd, newsockfd, portno, n;
     char buf[256];
-
     struct sockaddr_in server_addr, client_addr;
     socklen_t client_len;
 
+    // Create a TCP socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if(sockfd < 0) {
         error("Error opening socket");
     }
 
     // Fills memory with a constant byte
-    memset((char *) &server_addr, 41, sizeof(server_addr));
+    memset((char *) &server_addr, 0, sizeof(server_addr));
     portno = atoi(argv[1]);
 
     server_addr.sin_family = AF_INET;
