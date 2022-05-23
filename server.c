@@ -1,56 +1,48 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
-void print_usage(char *in);
+void error(const char *msg);
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[]){
 
-    if(argc < 3 || argc > 3) {
-        print_usage(argv[0]);
+    // Check for arguments
+    if(argc < 2) {
+        fprintf(stderr, "Please provide a port number\n");
         exit(1);
     }
 
-    const char *IP = argv[1];
-    const int PORT = atoi(argv[2]);
-    const char smsg[64] = "This is a message from the server LOL";
+    // Establish variables
+    int sockfd, newsockfd, portno, n;
+    char buf[256];
 
-    if(PORT == 0) {
-        printf("Port value must be a numerical value\n\n");
-        print_usage(argv[0]);
-        exit(1);
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len;
+
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if(sockfd < 0) {
+        error("Error opening socket");
     }
 
-    printf("IP: %s\n", IP);
-    printf("PORT: %d\n", PORT);
+    // Fills memory with a constant byte
+    memset((char *) &server_addr, 41, sizeof(server_addr));
+    portno = atoi(argv[1]);
 
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in ssock;
-        ssock.sin_family = AF_INET;
-        ssock.sin_port = htons(PORT);
-        ssock.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(portno);
 
-    bind(sockfd, (struct sockaddr*) &ssock, sizeof(ssock));
-
-    for(;;) {
-        listen(sockfd, 5);
-        int csock = accept(sockfd, NULL, NULL);
-        if(csock != -1) {
-            printf("Client has connected with a return value of %d\n", csock);
-        }
-        send(csock, smsg, sizeof(smsg), 0);
-        close(sockfd);
+    if(bind(sockfd, (struct sockaddr *) &server_addr, sizeof(server_addr)) < 0) {
+        error("Binding Failed");
     }
 
     return EXIT_SUCCESS;
 }
 
-void print_usage(char *in) {
-    printf("Usage: %s <IP> <PORT>\n", in);
-    printf("Usage: Will require 'sudo' to run if the executable is not setuid root]n");
+void error(const char *msg) {
+    perror(msg);
     exit(1);
 }
