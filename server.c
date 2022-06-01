@@ -9,7 +9,6 @@
 #include <pthread.h>
 
 #define MSG_LEN 2048
-#define NAME_LEN 32
 
 void print_usage();
 void error(const char *msg);
