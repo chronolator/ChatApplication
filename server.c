@@ -13,8 +13,8 @@
 void print_usage();
 void error(const char *msg);
 void str_rm_nl(char *arr, int len);
-void recv_handler();
-void send_handler();
+void recv_handler(void *in);
+void send_handler(void *in);
 
 int main(int argc, char *argv[]){
 
@@ -35,6 +35,8 @@ int main(int argc, char *argv[]){
     if(sockfd < 0) {
         error("Error opening socket");
     }
+    int *psockfd = malloc(sizeof(*psockfd));
+    *psockfd = sockfd;
 
     // Zero out struct, convert argv[1] to an int, set the server typei to IPv4, listening range, and port
     memset((char *) &server_addr, 0, sizeof(server_addr));
@@ -69,15 +71,15 @@ int main(int argc, char *argv[]){
         printf("Client from %s:%d\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
 
         // Thread sending messages
-        //pthread_t send_thread;
-        //if(pthread_create(&send_thread, NULL, (void *) send_handler, NULL) != 0) {
-        //    printf("Failed to create send pthread\n");
-        //    exit(1);
-        //}
+        pthread_t send_thread;
+        if(pthread_create(&send_thread, NULL, (void *) send_handler, psockfd) != 0) {
+            printf("Failed to create send pthread\n");
+            exit(1);
+        }
 
         // Thread receiving messages
         pthread_t recv_thread;
-        if(pthread_create(&recv_thread, NULL, (void *) recv_handler, NULL) != 0) {
+        if(pthread_create(&recv_thread, NULL, (void *) recv_handler, psockfd) != 0) {
             printf("Failed to create recv pthread\n");
             exit(1);
         }
@@ -109,19 +111,22 @@ void str_rm_nl(char *arr, int len) {
     }
 }
 
-void recv_handler(int sockfd) {
+void recv_handler(void *in) {
+    int sockfd = *((int *) in);
     char rmsg[MSG_LEN] = {};
     for(;;) {
         int r = recv(sockfd, rmsg, MSG_LEN, 0);
+        free(in);
         if(r > 0) {
-            printf("%s\n", rmsg);   
+            printf("Client: %s\n", rmsg);   
         } else {
             break;
         }
     }
 }
 
-void send_handler(int sockfd) {
+void send_handler(void *in) {
+    int sockfd = *((int *) in);
     char smsg[MSG_LEN] = {};
     for(;;) {
         printf("> ");
@@ -129,6 +134,7 @@ void send_handler(int sockfd) {
             str_rm_nl(smsg, MSG_LEN);
         }
         send(sockfd, smsg, MSG_LEN, 0);
+        free(in);
         if(strcmp(smsg, "exit") == 0) {
             break;
         }

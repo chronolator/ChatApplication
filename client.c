@@ -17,8 +17,8 @@ void print_usage();
 void error(const char *msg);
 void sig_handler();
 void str_rm_nl(char *arr, int len);
-void recv_handler();
-void send_handler();
+void recv_handler(void *in);
+void send_handler(void *in);
 
 int main(int argc, char *argv[]) {
 
@@ -31,6 +31,8 @@ int main(int argc, char *argv[]) {
         printf("Faield to create a socket\n");
         exit(1);
     }
+    int *psockfd = malloc(sizeof(*psockfd));
+    *psockfd = sockfd;
 
     // Socket settings
     struct sockaddr_in server, client;
@@ -57,14 +59,14 @@ int main(int argc, char *argv[]) {
 
     // Thread sending messages
     pthread_t send_thread;
-    if(pthread_create(&send_thread, NULL, (void *) send_handler, NULL) != 0) {
+    if(pthread_create(&send_thread, NULL, (void *) send_handler, psockfd) != 0) {
         printf("Failed to create pthread\n");
         exit(1);
     }
 
     // Thread receiving messages
     pthread_t recv_thread;
-    if(pthread_create(&recv_thread, NULL, (void *) recv_handler, NULL) != 0) {
+    if(pthread_create(&recv_thread, NULL, (void *) recv_handler, psockfd) != 0) {
         printf("Failed to create pthread\n");
         exit(1);
     }
@@ -102,27 +104,31 @@ void str_rm_nl(char *arr, int len) {
     }
 }
 
-void recv_handler(int sockfd) {
+void recv_handler(void *in) {
+    int sockfd = *((int *) in);
     char rmsg[MSG_LEN] = {};
     for(;;) {
         int r = recv(sockfd, rmsg, MSG_LEN, 0);
         if(r > 0) {
-            printf("%s\n", rmsg);
+            printf("Server: %s\n", rmsg);
         }
         else {
+            free(in);
             break;
         }
     }
 }
 
-void send_handler(int sockfd) {
+void send_handler(void *in) {
+    int sockfd = *((int *) in);
     char smsg[MSG_LEN] = {};
-    printf("> ");
+    printf(">>> ");
     for(;;) {
         while(fgets(smsg, sizeof(smsg), stdin) != NULL) {
             str_rm_nl(smsg, MSG_LEN);
         }
         send(sockfd, smsg, MSG_LEN, 0);
+        free(in);
         if(strcmp(smsg, "exit") == 0) {
             break;
         }
