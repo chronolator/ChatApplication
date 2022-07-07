@@ -7,27 +7,29 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <ncurses.h>
 
 #define BUF_SIZE 256
 #define CLIADDR_LEN 100
 
-int gsockfd, gnewsockfd;
+int sockfd, len, ret, newsockfd;
+struct sockaddr_in ser_addr, cli_addr;
 
 void *recMsg(void *sock);
-void sig_handler(int signo, int server, int client);
+void sig_handler(int signo);
 
 int main(int argc, char *argv[]){ 
     const int PORT = 8000;
+    const int REUSE_ENABLE = 1;
 
-    int sockfd, len, ret, newsockfd;
     char buffer[BUF_SIZE];
     char clientAddr[CLIADDR_LEN];
     pthread_t rThread;
-    pid_t childpid;
-    struct sockaddr_in ser_addr, cli_addr;
-        ser_addr.sin_family = AF_INET;
-        ser_addr.sin_port = htons(PORT);
-        ser_addr.sin_addr.s_addr = INADDR_ANY;
+    //pid_t childpid;
+    ser_addr.sin_family = AF_INET;
+    ser_addr.sin_port = htons(PORT);
+    ser_addr.sin_addr.s_addr = INADDR_ANY;
         
 
     // Catch sigint
@@ -38,12 +40,18 @@ int main(int argc, char *argv[]){
 
     // Create socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    gsockfd = sockfd;
     if(sockfd < 0) {
         printf("Error creating socket\n");
         exit(1);
     }
     printf("Socket created\n");
+
+
+    // Set reuse socket option
+    if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &REUSE_ENABLE, sizeof(REUSE_ENABLE)) < 0) {
+        perror("setsockopt");
+        exit(1);
+    }
 
     // Bind to socket
     ret = bind(sockfd, (struct sockaddr *) &ser_addr, sizeof(ser_addr));
@@ -59,10 +67,10 @@ int main(int argc, char *argv[]){
 
     // Accept incoming connections
     len = sizeof(cli_addr);
-    printf("Size of cli_addr: %d\n", cli_addr);
-    printf("Size of ser_addr: %d\n", ser_addr);
-    newsockfd = accept(sockfd, (struct sockaddr*) &cli_addr, &len);
-    gnewsockfd = newsockfd;
+    printf("Size of cli_addr: %ld\n", sizeof(cli_addr));
+    printf("Size of ser_addr: %ld\n", sizeof(ser_addr));
+    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
+    //newsockfd = accept(sockfd, NULL, NULL);
     if(newsockfd < 0) {
         printf("Error accepting connection\n");
         exit(1);
@@ -73,7 +81,6 @@ int main(int argc, char *argv[]){
     printf("Connection accepted from %s...\n", clientAddr);
     
     // Create a pthread for receiving messages from the client
-    printf("SERVER> ");
     ret = pthread_create(&rThread, NULL, recMsg, (void *) newsockfd);
     if(ret < 0) {
         printf("Error from pthread_create() is %d\n", ret);
@@ -81,8 +88,10 @@ int main(int argc, char *argv[]){
     }
 
     // Stdin data sent to the client
+    printf("SERVER> ");
     while(fgets(buffer, BUF_SIZE, stdin) != NULL) {
-        ret = sendto(newsockfd, buffer, BUF_SIZE, 0, (struct sockaddr*) &cli_addr, len);
+        printf("SERVER> ");
+        ret = sendto(newsockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &cli_addr, len);
         if(ret < 0) {
             printf("Error sending the data below to the client:\n\t%s\n", buffer);
             exit(1);
@@ -96,19 +105,26 @@ int main(int argc, char *argv[]){
     return EXIT_SUCCESS;
 }
 
+// Pthread receiving a message from the client socket
 void *recMsg(void *socket) {
-    int ret;
-    int sockfd = ((int) socket);
-    char buffer[BUF_SIZE];
-    //memset(buffer, 0, BUF_SIZE);
+    int rret;
+    int rsockfd = ((int) socket);
+    char rbuffer[BUF_SIZE];
 
     for(;;) {
-        ret = recvfrom(sockfd, buffer, BUF_SIZE, 0, NULL, NULL);
+        rret = recvfrom(rsockfd, rbuffer, BUF_SIZE, 0, NULL, NULL);
 
-        if(ret < 0) {
+        if(rret < 0) {
             printf("Error receiving data.\n");
         } else {
-            printf("client: %s\n", buffer);
+            if(strncmp(rbuffer, "/exit\0", BUF_SIZE) == 0) {
+                printf("Obtained the exit\n");
+                close(newsockfd);
+                close(sockfd);
+                //pthread_exit(NULL);
+                exit(1);
+            }
+            printf("\nclient: %s", rbuffer);
             //printf("client: ");
             //fputs(buffer, stdout);
             //printf("\n");
@@ -116,11 +132,19 @@ void *recMsg(void *socket) {
     }
 }
 
+// SIGINT will terminate both sockets
 void sig_handler(int signo) {
     if(signo == SIGINT) {
-        // Kill the client program somehow here
-        close(gnewsockfd);
-        close(gsockfd);
+        char rbuffer[BUF_SIZE] = "/exit\0";
+        ret = sendto(newsockfd, rbuffer, BUF_SIZE, 0, (struct sockaddr *) &cli_addr, len);
+        if(ret < 0) {
+            printf("Error sending the data below to the client:\n\t%s\n", rbuffer);
+            exit(1);
+        }
+
+        close(newsockfd);
+        close(sockfd);
+        //pthread_exit(NULL);
         printf("Caught sigint\n"); 
         exit(1);
     }
