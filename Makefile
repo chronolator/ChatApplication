@@ -1,5 +1,5 @@
 CC		= gcc
-CFLAGS		= -Wall
+CFLAGS		= -Wall -lpthread -lncurses
 RM		= rm -f
 BINDIR		= ./bin
 SRCS		= $(wildcard *.c)
