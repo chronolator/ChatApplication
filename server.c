@@ -30,7 +30,16 @@ int main(int argc, char *argv[]){
     ser_addr.sin_family = AF_INET;
     ser_addr.sin_port = htons(PORT);
     ser_addr.sin_addr.s_addr = INADDR_ANY;
-        
+
+    /* NCURSES Programming */
+    initscr();
+    printw("Hello World\n");
+    refresh();
+    getch();
+
+    /* NCURSES Programming */
+    
+    
 
     // Catch sigint
     if(signal(SIGINT, sig_handler) == SIG_ERR) {
@@ -102,6 +111,7 @@ int main(int argc, char *argv[]){
     close(newsockfd);
     close(sockfd);
     pthread_exit(NULL);
+    endwin();   /* NCURSES: closes curses mode */
     return EXIT_SUCCESS;
 }
 
