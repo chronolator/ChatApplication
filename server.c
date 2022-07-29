@@ -44,15 +44,17 @@ int main(int argc, char *argv[]){
 
     /* NCURSES Programming */
     initscr();
-    printw("COLS: %d\n", COLS);
-    printw("LINES: %d\n", LINES);
+    //printw("COLS: %d\n", COLS);
+    //printw("LINES: %d\n", LINES);
     //getch();
-    refresh();
+    //refresh();
 
     //int height = 50;
     //int width = 50;
     //int starty = 0; //COLS/2;
     //int startx = 0; //LINES/2;
+    
+    /* NCURSES Format Chatlog Border Window */
     chatlog_border_win = create_newwin(LINES-4, COLS-1, 0, 0);
     box(chatlog_border_win, 0, 0);
     chat_border_win = create_newwin(3, COLS-1, LINES-4, 0);
@@ -60,14 +62,15 @@ int main(int argc, char *argv[]){
     wrefresh(chatlog_border_win);
     wrefresh(chat_border_win);
 
+    /* NCURSES Format Chatlog Window */
     chatlog_win = create_newwin(LINES-6, COLS-3, 1, 1);
     chat_win = create_newwin(1, COLS-3, LINES-3, 1);
     wrefresh(chatlog_win);
     wrefresh(chat_win);
-    /* NCURSES Programming */
-    
-    
 
+    /* NCURSES Programming */
+
+    
     // Catch sigint
     if(signal(SIGINT, sig_handler) == SIG_ERR) {
         wprintw(chatlog_win, "Unable to catch SIGINT\n");
@@ -148,12 +151,13 @@ int main(int argc, char *argv[]){
     // Move cursor to the chat_win window
     wmove(chat_win, 0, 0);
 
+    // 
     do {
         wclear(chat_win);
         mvwprintw(chat_win, 0, 0, "SERVER> ");
         wrefresh(chat_win);
-        wgetnstr(chat_win, buffer, sizeof(buffer));
-        ret = sendto(newsockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &cli_addr, len);
+        wgetnstr(chat_win, buffer, sizeof(buffer)); // This might the problem with the socket
+        ret = sendto(newsockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &cli_addr, len); // Or this
         if(ret < 0) {
             wprintw(chatlog_win, "Error sending the data below to the client:\n\t%s\n", buffer);
             wrefresh(chatlog_win);
