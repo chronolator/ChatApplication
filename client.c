@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
 
     // Args
     if(argc < 2) {
-        printf("usage: client < ip address >\n");
+        printf("usage: client <IP ADDRESS>\n");
         exit(1);
     }
     server_address = argv[1];
