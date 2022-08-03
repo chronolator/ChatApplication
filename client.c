@@ -12,9 +12,11 @@
 
 #define BUF_SIZE 256
 
+// Globals
 int sockfd, ret;
 struct sockaddr_in ser_addr, cli_addr;
 
+// Functions
 void *recMsg(void *socket);
 void sig_handler(int signo);
 
@@ -83,6 +85,7 @@ int main(int argc, char *argv[]) {
 
 // Pthread receiving a message from the server socket
 void *recMsg(void *socket) {
+    bool init = true;
     int rret;
     int rsockfd = ((int) socket);
     char rbuffer[BUF_SIZE];
@@ -93,13 +96,20 @@ void *recMsg(void *socket) {
         if(rret < 0) {
             printf("Error receiving data\n");   
         } else {
+            if(init) {
+                printf("\nserver: %s", rbuffer);
+                init = false;
+            }
             if(strncmp(rbuffer, "/exit\0", BUF_SIZE) == 0) {
                 printf("Obtained the exit\n");
                 close(sockfd);
                 //pthread_exit(NULL);
                 exit(1);
             }
-            printf("\nserver: %s", rbuffer);
+            //if(strncmp(rbuffer, '\0', BUF_SIZE) == 0) {
+            //    exit(1);
+            //}
+            printf("server: %s\n", rbuffer);
             //printf("server: "),;
             //fputs(buffer, stdout);
             //printf("\n");
