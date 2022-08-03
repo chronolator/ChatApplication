@@ -33,6 +33,7 @@ WINDOW *create_newwin(int height, int width, int starty, int startx);
 int main(int argc, char *argv[]){ 
     const int PORT = 8000;
     const int REUSE_ENABLE = 1;
+    const char NT[1] = {'\0'};
 
     char buffer[BUF_SIZE];
     char clientAddr[CLIADDR_LEN];
@@ -151,13 +152,18 @@ int main(int argc, char *argv[]){
     // Move cursor to the chat_win window
     wmove(chat_win, 0, 0);
 
-    // 
+    // Input do while to refresh chat_win 
     do {
         wclear(chat_win);
         mvwprintw(chat_win, 0, 0, "SERVER> ");
         wrefresh(chat_win);
-        wgetnstr(chat_win, buffer, sizeof(buffer)); // This might the problem with the socket
+        wgetnstr(chat_win, buffer, sizeof(buffer)); // This might the problem with the socket o rmaybe its not null terminated
+        //fflush(stdout);
+        //buffer[sizeof(BUF_SIZE-1)] = '\0';
+        wprintw(chatlog_win, "Length of string buffer: %d\n", strlen(buffer));
+        memset(buffer, 0, sizeof(buffer));
         ret = sendto(newsockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &cli_addr, len); // Or this
+        //ret = sendto(newsockfd, NT, sizeof(NT), 0, (struct sockaddr *) &cli_addr, len); // Or this
         if(ret < 0) {
             wprintw(chatlog_win, "Error sending the data below to the client:\n\t%s\n", buffer);
             wrefresh(chatlog_win);
@@ -187,7 +193,8 @@ void *recMsg(void *socket) {
     char rbuffer[BUF_SIZE];
 
     for(;;) {
-        rret = recvfrom(rsockfd, rbuffer, BUF_SIZE, 0, NULL, NULL);
+        memset(rbuffer, 0, sizeof(rbuffer));
+        //rret = recvfrom(rsockfd, rbuffer, BUF_SIZE, 0, NULL, NULL);
 
         if(rret < 0) {
             wprintw(chatlog_win, "Error receiving data.\n");
@@ -198,6 +205,7 @@ void *recMsg(void *socket) {
                 wrefresh(chatlog_win);
                 close(newsockfd);
                 close(sockfd);
+                system("stty sane; clear");
                 //pthread_exit(NULL);
                 exit(1);
             }
@@ -226,6 +234,7 @@ void sig_handler(int signo) {
         //pthread_exit(NULL);
         wprintw(chatlog_win, "Caught sigint\n"); 
         wrefresh(chatlog_win);
+        system("stty sane; clear;");
         exit(1);
     }
 }
